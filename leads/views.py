@@ -1,11 +1,12 @@
+from agents.mixins import OrganizorAndLoginRequiredMixin
 from .forms import CustomUserCreationForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.mail import send_mail
 from django.shortcuts import render, redirect, reverse
-from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView, DeleteView
+from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
 
-from leads.forms import LeadModelForm
-from leads.models import Lead
+from leads.forms import LeadModelForm, AssignAgentForm, LeadCategoryUpdateForm
+from leads.models import Lead, Category
 
 
 class SignupView(LoginRequiredMixin, CreateView):
@@ -26,8 +27,27 @@ def landing_page(request):
 
 class LeadListView(LoginRequiredMixin, ListView):
     template_name = 'leads/lead_list.html'
-    queryset = Lead.objects.all()
     context_object_name = 'leads'
+
+    def get_queryset(self):
+        user = self.request.user
+        # initial queryset of leads for the entire organisation
+        if user.is_organisor:
+            queryset = Lead.objects.filter(organisation=user.userprofile, agent__isnull=False)
+        else:
+            queryset = Lead.objects.filter(organisation=user.agent.organization, agent__isnull=False)
+            # filter for the agent that is logged in
+            queryset = queryset.filter(agent__user=user)
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.request.user.is_organisor:
+            queryset = Lead.objects.filter(organisation=self.request.user.userprofile, agent__isnull=True)
+            context.update({
+                'unassigned_leads': queryset
+            })
+        return context
 
 
 def lead_list(request):
@@ -40,8 +60,16 @@ def lead_list(request):
 
 class LeadDetailView(LoginRequiredMixin, DetailView):
     template_name = 'leads/lead_details.html'
-    queryset = Lead.objects.all()
     context_object_name = 'lead'
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_organisor:
+            queryset = Lead.objects.filter(organisation=user.userprofile)
+        else:
+            queryset = Lead.objects.filter(organisation=user.agent.organization)
+            queryset = queryset.filter(agent__user=user)
+        return queryset
 
 
 def lead_detail(request, pk):
@@ -52,7 +80,7 @@ def lead_detail(request, pk):
     return render(request, 'leads/lead_details.html', context)
 
 
-class LeadCreateView(LoginRequiredMixin, CreateView):
+class LeadCreateView(OrganizorAndLoginRequiredMixin, CreateView):
     template_name = 'leads/lead_create.html'
     queryset = Lead.objects.all()
     form_class = LeadModelForm
@@ -83,10 +111,13 @@ def lead_create(request):
     return render(request, 'leads/lead_create.html', context)
 
 
-class LeadUpdateView(LoginRequiredMixin, UpdateView):
+class LeadUpdateView(OrganizorAndLoginRequiredMixin, UpdateView):
     template_name = 'leads/lead_update.html'
-    queryset = Lead.objects.all()
     form_class = LeadModelForm
+
+    def get_queryset(self):
+        user = self.request.user
+        return Lead.objects.filter(organisation=user.userprofile)
 
     def get_success_url(self):
         return reverse('leads:lead-update')
@@ -107,9 +138,12 @@ def lead_update(request, pk):
     return render(request, 'leads/lead_update.html', context)
 
 
-class LeadDeleteView(LoginRequiredMixin, DeleteView):
+class LeadDeleteView(OrganizorAndLoginRequiredMixin, DeleteView):
     template_name = 'leads/lead_delete.html'
-    queryset = Lead.objects.all()
+
+    def get_queryset(self):
+        user = self.request.user
+        return Lead.objects.filter(organisation=user.userprofile)
 
     def get_success_url(self):
         return reverse('leads:lead-list')
@@ -120,6 +154,84 @@ def lead_delete(request, pk):
     lead.delete()
     return redirect('/leads')
 
+
+class AssignAgentView(OrganizorAndLoginRequiredMixin, FormView):
+    template_name = 'leads/assign_agent.html'
+    form_class = AssignAgentForm
+
+    def get_form_kwargs(self, **kwargs):
+        kwargs = super().get_form_kwargs(**kwargs)
+        kwargs.update({
+            'request': self.request
+        })
+        return kwargs
+
+    def get_success_url(self):
+        return reverse('leads:lead-list')
+
+    def form_valid(self, form):
+        agent = form.cleaned_data['agent']
+        lead = Lead.objects.get(id=self.kwargs['pk'])
+        lead.agent = agent
+        lead.save()
+        return super().form_valid(form)
+
+
+class CategoryListView(LoginRequiredMixin, ListView):
+    template_name = 'leads/category_list.html'
+    context_object_name = 'category_list'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        if user.is_organisor:
+            queryset = Lead.objects.filter(organisation=user.userprofile)
+        else:
+            queryset = Lead.objects.filter(organisation=user.agent.organization)
+        context.update({
+            'unassigned_lead_count': queryset.filter(category__isnull=True)
+        })
+        return context
+
+    def get_queryset(self):
+        user = self.request.user
+        # initial queryset of leads for the entire organisation
+        if user.is_organisor:
+            queryset = Category.objects.filter(organisation=user.userprofile)
+        else:
+            queryset = Category.objects.filter(organisation=user.agent.organization)
+        return queryset
+
+
+class CategoryDetailView(LoginRequiredMixin, DetailView):
+    template_name = 'leads/category_detail.html'
+    context_object_name = 'category'
+
+    def get_queryset(self):
+        user = self.request.user
+        # initial queryset of leads for the entire organisation
+        if user.is_organisor:
+            queryset = Category.objects.filter(organisation=user.userprofile)
+        else:
+            queryset = Category.objects.filter(organisation=user.agent.organization)
+        return queryset
+
+
+class LeadCategoryUpdateView(LoginRequiredMixin, UpdateView):
+    template_name = 'leads/lead_ategory_update.html'
+    form_class = LeadCategoryUpdateForm
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_organisor:
+            queryset = Lead.objects.filter(organisation=user.userprofile)
+        else:
+            queryset = Lead.objects.filter(organisation=user.agent.organization)
+            queryset = queryset.filter(agent__user=user)
+        return queryset
+
+    def get_success_url(self):
+        return reverse('leads:lead-detail', kwargs={'pk': self.get_object().id})
 # def lead_create(request):
 #     form = LeadForm()
 #     if request.POST == 'POST':

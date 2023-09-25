@@ -8,4 +8,4 @@ User = get_user_model()
 class AgentModelForm(forms.ModelForm):
     class Meta:
         model = User
-        fields = ('username',)
+        fields = ('email', 'username', 'first_name', 'last_name',)
