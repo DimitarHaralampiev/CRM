@@ -2,14 +2,14 @@ import random
 
 from django.core.mail import send_mail
 from django.views.generic import ListView, CreateView, DetailView, UpdateView, DeleteView
-from .mixins import OrganizorAndLoginRequiredMixin
+from .mixins import OrganisorAndLoginRequiredMixin
 from django.shortcuts import reverse
 
 from agents.forms import AgentModelForm
 from leads.models import Agent
 
 
-class AgentListView(OrganizorAndLoginRequiredMixin, ListView):
+class AgentListView(OrganisorAndLoginRequiredMixin, ListView):
     template_name = 'agents/agent_list.html'
     context_object_name = 'agents'
 
@@ -18,7 +18,7 @@ class AgentListView(OrganizorAndLoginRequiredMixin, ListView):
         return Agent.objects.filter(organization=organization)
 
 
-class AgentCreateView(OrganizorAndLoginRequiredMixin, CreateView):
+class AgentCreateView(OrganisorAndLoginRequiredMixin, CreateView):
     template_name = 'agents/agent_create.html'
     form_class = AgentModelForm
 
@@ -38,15 +38,13 @@ class AgentCreateView(OrganizorAndLoginRequiredMixin, CreateView):
         send_mail(
             subject='You are invited to be an agent',
             message='You were added as an agent on CRM. Please come login to start working.',
-            from_email = 'admin@test.com',
-            recipient_list = [user.email]
+            from_email='admin@test.com',
+            recipient_list=[user.email]
         )
-        # agent.organization = self.request.user.userprofile
-        # agent.save()
         return super(AgentCreateView, self).form_valid(form)
 
 
-class AgentDetailView(OrganizorAndLoginRequiredMixin, DetailView):
+class AgentDetailView(OrganisorAndLoginRequiredMixin, DetailView):
     template_name = 'agents/agent_detail.html'
     context_object_name = 'agent'
 
@@ -54,7 +52,7 @@ class AgentDetailView(OrganizorAndLoginRequiredMixin, DetailView):
         Agent.objects.all()
 
 
-class AgentUpdateView(OrganizorAndLoginRequiredMixin, UpdateView):
+class AgentUpdateView(OrganisorAndLoginRequiredMixin, UpdateView):
     template_name = 'agents/agent_update.html'
     form_class = AgentModelForm
 
@@ -65,7 +63,7 @@ class AgentUpdateView(OrganizorAndLoginRequiredMixin, UpdateView):
         Agent.objects.all()
 
 
-class AgentDeleteView(OrganizorAndLoginRequiredMixin, DeleteView):
+class AgentDeleteView(OrganisorAndLoginRequiredMixin, DeleteView):
     template_name = 'agents/agent_delete.html'
     context_object_name = 'agent'
 
