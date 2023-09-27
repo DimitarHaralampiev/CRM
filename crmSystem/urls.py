@@ -25,7 +25,7 @@ from django.conf.urls.static import static
 from django.conf import settings
 from django.urls import path, include
 
-from leads.views import LandingPageView, SignupView
+from leads.views import LandingPageView, SignupView, DashboardView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
